@@ -273,7 +273,8 @@ export default class CharacterImport extends Application {
 
     // collect all items belonging to one of those inventory item categories
     let ownedItems = this.actor.getEmbeddedCollection("OwnedItem");
-    let toRemove = ownedItems.filter((item) => invalidItemTypes.includes(item.type)).map((item) => item._id);
+    let toRemove = ownedItems.filter((item) => invalidItemTypes.includes(item.type)).filter(
+      (item) => ! item.name.includes('(keep)')).map((item) => item._id);
     await this.actor.deleteEmbeddedEntity("OwnedItem", toRemove);
     return toRemove;
   }
