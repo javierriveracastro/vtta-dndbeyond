@@ -1,4 +1,6 @@
-# VTTA D&D Beyond
+# VTTA D&D Beyond (Javier Rivera's fork)
+
+This is just a small fork that will keel the items with (keep) in its name for being deleted on a new import
 
 The integration module provides you with the possibility to import
 
