@@ -1,22 +1,6 @@
 import utils from "../utils.js";
 
 /**
- * Look up a component by id
- * For now we assume that most features we are going to want to get a scaling value
- * from are character options
- * @param {*} ddb
- * @param {*} featureId
- */
-const findComponentByComponentId = (ddb, componentId) => {
-  let result;
-  ddb.character.classes.forEach((cls) => {
-    const feature = cls.classFeatures.find((component) => component.definition.id === componentId);
-    if (feature) result = feature;
-  });
-  return result;
-};
-
-/**
  * Gets the levelscaling value for a feature
  * @param {*} feature
  */
@@ -43,7 +27,7 @@ let parseMatch = (ddb, character, match, feature) => {
 
   // scalevalue
   if (result.includes("scalevalue")) {
-    const feat = feature.levelScale ? feature : findComponentByComponentId(ddb, feature.componentId);
+    const feat = feature.levelScale ? feature : utils.findComponentByComponentId(ddb, feature.componentId);
     const scaleValue = getScalingValue(feat);
     result = result.replace("scalevalue", scaleValue);
   }
@@ -69,12 +53,12 @@ let parseMatch = (ddb, character, match, feature) => {
   if (result.includes("modifier")) {
     const regexp = /modifier:([a-z]{3})/g;
     // creates array from match groups and dedups
-    const mods = [...new Set(Array.from(result.matchAll(regexp), (m) => m[1]))];
+    const ability = [...new Set(Array.from(result.matchAll(regexp), (m) => m[1]))];
 
-    mods.forEach((mod) => {
-      const abilityModifier = utils.calculateModifier(character.data.abilities[mod].value);
-      const modRegexp = RegExp(`modifier:${mod}`, "g");
-      result = result.replace(modRegexp, abilityModifier);
+    ability.forEach((ab) => {
+      const abilityModifier = character.data.abilities[ab].mod;
+      const abRegexp = RegExp(`modifier:${ab}`, "g");
+      result = result.replace(abRegexp, abilityModifier);
     });
   }
 
@@ -93,9 +77,37 @@ let parseMatch = (ddb, character, match, feature) => {
       if (optionCls) {
         result = result.replace("classlevel", optionCls.level);
       } else {
-        console.error("Unable to parse option class info, please log a bug report");
+        console.error("Unable to parse option class info, please log a bug report"); // eslint-disable-line no-console
       }
     }
+  }
+
+  if (result.includes("characterlevel")) {
+    result = result.replace("characterlevel", character.flags.vtta.dndbeyond.totalLevels);
+  }
+
+  if (result.includes("proficiency")) {
+    const profBonus = character.data.attributes.prof;
+    result = result.replace("proficiency", profBonus);
+  }
+
+  // abilityscore:int
+  if (result.includes("abilityscore")) {
+    const regexp = /abilityscore:([a-z]{3})/g;
+    // creates array from match groups and dedups
+    const ability = [...new Set(Array.from(result.matchAll(regexp), (m) => m[1]))];
+
+    ability.forEach((ab) => {
+      const abilityModifier = character.data.abilities[ab].value;
+      const abRegexp = RegExp(`abilityscore:${ab}`, "g");
+      result = result.replace(abRegexp, abilityModifier);
+    });
+  }
+
+  // limiteduse
+  if (result.includes("limiteduse")) {
+    const limitedUse = feature.limitedUse.maxUses;
+    result = result.replace("limiteduse", limitedUse);
   }
 
   return result;
@@ -128,8 +140,8 @@ const applyConstraint = (value, constraint) => {
         break;
       }
       default: {
-        console.log(`Missed match is ${match}`);
-        console.warn(`vtta-dndbeyond does not know about template constraint {{@${constraint}}}. Please log a bug.`);
+        utils.log(`Missed match is ${match}`);
+        console.warn(`vtta-dndbeyond does not know about template constraint {{@${constraint}}}. Please log a bug.`); // eslint-disable-line no-console
       }
     }
   } else {
@@ -144,7 +156,7 @@ const applyConstraint = (value, constraint) => {
         break;
       }
       default: {
-        console.warn(`vtta-dndbeyond does not know about template constraint {{@${constraint}}}. Please log a bug.`);
+        console.warn(`vtta-dndbeyond does not know about template constraint {{@${constraint}}}. Please log a bug.`); // eslint-disable-line no-console
       }
     }
   }
@@ -193,9 +205,9 @@ export default function parseTemplateString(ddb, character, text, feature) {
           result = result.replace(replacePattern, evalMatch);
         }
       } catch (err) {
-        console.error(err);
+        utils.log(err);
         result = result.replace(replacePattern, `{{${match}}}`);
-        console.warn(`vtta-dndbeyond does not know about template value {{${match}}}. Please log a bug.`);
+        console.warn(`vtta-dndbeyond does not know about template value {{${match}}}. Please log a bug.`); // eslint-disable-line no-console
       }
     }
   });

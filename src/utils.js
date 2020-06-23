@@ -69,6 +69,37 @@ let utils = {
     return !!classOptions;
   },
 
+  getClassFromOptionID: (data, optionId) => {
+    // Use case class spell - which class?
+    // componentId on spells.class[0].componentId = options.class[0].definition.id
+    // options.class[0].definition.componentId = classes[0].classFeatures[0].definition.id
+    const option = data.character.options.class.find((option) => option.definition.id === optionId);
+    utils.log(option);
+    if (option) {
+      const klass = data.character.classes.find((klass) =>
+        klass.classFeatures.some((feature) => feature.definition.id === option.componentId)
+      );
+      return klass;
+    }
+    return undefined;
+  },
+
+  /**
+   * Look up a component by id
+   * For now we assume that most features we are going to want to get a scaling value
+   * from are character options
+   * @param {*} ddb
+   * @param {*} featureId
+   */
+  findComponentByComponentId: (ddb, componentId) => {
+    let result;
+    ddb.character.classes.forEach((cls) => {
+      const feature = cls.classFeatures.find((component) => component.definition.id === componentId);
+      if (feature) result = feature;
+    });
+    return result;
+  },
+
   /**
    * Gets the sourcebook for a subset of dndbeyond sources
    * @param {obj} definition item definition
@@ -113,7 +144,7 @@ let utils = {
     const modifiers = data.character.inventory
       .filter(
         (item) =>
-          ((!item.definition.canEquip && !item.definition.canAttune) || // if item just gives a thing
+          ((!item.definition.canEquip && !item.definition.canAttune && !item.definition.isConsumable) || // if item just gives a thing and not potion/scroll
           (item.isAttuned && item.equipped) || // if it is attuned and equipped
           (item.isAttuned && !item.definition.canEquip) || // if it is attuned but can't equip
             (!item.definition.canAttune && item.equipped)) && // can't attune but is equipped
@@ -131,7 +162,7 @@ let utils = {
         (modifier) =>
           modifier.type === type &&
           (subType !== null ? modifier.subType === subType : true) &&
-          restriction.includes(modifier.restriction)
+          (!restriction ? true : restriction.includes(modifier.restriction))
       );
   },
 
@@ -381,7 +412,7 @@ let utils = {
     return undefined;
   },
 
-  uploadImage: async function (url, targetDirectory, baseFilename) {
+  uploadImage: async function (url, targetDirectory, baseFilename, useProxy = true) {
     async function download(url) {
       return new Promise((resolve, reject) => {
         try {
@@ -415,7 +446,7 @@ let utils = {
             resolve(result.path);
           })
           .catch((error) => {
-            console.error(`error uploading file: ${error}`);
+            utils.log(`error uploading file: ${error}`);
             reject(error);
           });
       });
@@ -436,10 +467,11 @@ let utils = {
 
     // uploading the character avatar and token
     try {
-      let result = await process("https://proxy.vttassets.com/?url=" + url, targetDirectory, filename + "." + ext);
+      url = useProxy ? "https://proxy.vttassets.com/?url=" + url : url;
+      let result = await process(url, targetDirectory, filename + "." + ext);
       return result;
     } catch (error) {
-      console.log(error);
+      utils.log(error);
       ui.notifications.warn("Image upload failed. Please check your vtta-dndbeyond upload folder setting");
       return null;
     }
@@ -593,8 +625,6 @@ let utils = {
 
     let existingEntry = await utils.queryCompendium(compendiumName, entity.name);
     if (existingEntry) {
-      console.log("Entry exists already:");
-      console.log(existingEntry);
       if (updateExistingEntry) {
         // update all existing entries
         existingEntry = await compendium.updateEntity({
@@ -608,13 +638,10 @@ let utils = {
           name: existingEntry.name,
         };
       } else {
-        console.log("Update: no");
         return existingEntry;
       }
     } else {
-      console.log("Entry does not exist");
       let compendiumEntry = await compendium.createEntity(entity.data);
-      console.log(compendiumEntry);
       return {
         _id: compendiumEntry._id,
         img: compendiumEntry.img,
@@ -643,11 +670,11 @@ let utils = {
       switch (typeof msg) {
         case "object":
         case "array":
-          console.log(`${LOG_PREFIX} | ${section} > ${typeof msg}`);
-          console.log(msg);
+          console.log(`${LOG_PREFIX} | ${section} > ${typeof msg}`); // eslint-disable-line no-console
+          console.log(msg); // eslint-disable-line no-console
           break;
         default:
-          console.log(`${LOG_PREFIX} | ${section} > ${msg}`);
+          console.log(`${LOG_PREFIX} | ${section} > ${msg}`); // eslint-disable-line no-console
       }
   },
 
@@ -682,17 +709,10 @@ let utils = {
 
       if (v1parts[i] > v2parts[i]) {
         return 1;
-      } else {
+      }
+      if (v1parts[i] < v2parts[i]) {
         return -1;
       }
-
-      // if (v1parts[i] == v2parts[i]) {
-      //   continue;
-      // } else if (v1parts[i] > v2parts[i]) {
-      //   return 1;
-      // } else {
-      //   return -1;
-      // }
     }
 
     if (v1parts.length != v2parts.length) {

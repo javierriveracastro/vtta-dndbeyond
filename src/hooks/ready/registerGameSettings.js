@@ -33,6 +33,16 @@ export default function () {
     default: "[data] ",
   });
 
+  game.settings.register("vtta-dndbeyond", "scene-format", {
+    name: "vtta-dndbeyond.scene-format.name",
+    hint: "vtta-dndbeyond.scene-format.hint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: ["vtta-dndbeyond.scene-format.0", "vtta-dndbeyond.scene-format.1"],
+    default: 0,
+  });
+
   game.settings.register("vtta-dndbeyond", "entity-import-policy", {
     name: "vtta-dndbeyond.entity-import-policy.name",
     hint: "vtta-dndbeyond.entity-import-policy.hint",
@@ -93,6 +103,15 @@ export default function () {
   });
 
   /** Character update settings, stored per user and non-configurable in the settings screen */
+  game.settings.register("vtta-dndbeyond", "character-update-policy-new", {
+    name: "vtta-dndbeyond.character-update-policy-new.name",
+    hint: "vtta-dndbeyond.character-update-policy-new.hint",
+    scope: "player",
+    config: false,
+    type: Boolean,
+    default: false,
+  });
+
   game.settings.register("vtta-dndbeyond", "character-update-policy-class", {
     name: "vtta-dndbeyond.character-update-policy-class.name",
     hint: "vtta-dndbeyond.character-update-policy-class.hint",
@@ -119,6 +138,7 @@ export default function () {
     type: Boolean,
     default: true,
   });
+
   game.settings.register("vtta-dndbeyond", "character-update-policy-equipment", {
     name: "vtta-dndbeyond.character-update-policy-equipment.name",
     hint: "vtta-dndbeyond.character-update-policy-equipment.hint",
@@ -127,6 +147,7 @@ export default function () {
     type: Boolean,
     default: true,
   });
+
   game.settings.register(
     "vtta-dndbeyond",
     "character-update-policy-inventory", // = consumable, tool & loot
@@ -169,5 +190,12 @@ export default function () {
     config: false,
     type: String,
     default: "1.0.0",
+  });
+  // sets the user submission name for scene adjustments
+  game.settings.register("vtta-dndbeyond", "scene-submission-username", {
+    scope: "user",
+    config: false,
+    type: String,
+    default: "",
   });
 }

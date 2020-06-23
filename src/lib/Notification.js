@@ -1,31 +1,48 @@
 /**
  * Shows notifcations and hints to the user
  */
+const MARGIN = 10;
+
 const registerNotifications = () => {
   // register the notification global object
-  console.log("Registering notifications");
-  $("body").append(`<div id="vtta-notifications"></div>`);
-  $("body").append(`<div id="vtta-hints"></div>`);
+
+  if ($("#vtta-notifications").length === 0) {
+    $("body").append(`<div id="vtta-notifications"></div>`);
+  }
+  if ($("#vtta-hints").length === 0) {
+    $("body").append(`<div id="vtta-hints"></div>`);
+  }
 
   window.vtta = window.vtta || {
     notification: {
       clear: () => {
-        $("#vtta-notifications div").hide(200, (event) => {
-          console.log(event);
+        $("#vtta-notifications div").fadeOut(200, () => {
           $("#vtta-notifications").empty();
         });
       },
-      show: (message, timeout = 2000) => {
-        let note = $(`<div style="display: none">${message}</div>`);
-        $("#vtta-notifications").append(note);
-        $(note).fadeIn(2000);
+      show: (message, timeout = 4000) => {
+        $("#vtta-notifications").css("left", $("#players").css("left"));
+        // prettier-ignore
+        $("#vtta-notifications").css("bottom", $("#players").height() + (2 * MARGIN));
 
-        setTimeout(() => {
-          $(note).hide(200, (event) => {
-            console.log(event);
+        let note = $(`<div style="display: none"></div>`).append(message);
+        $("#vtta-notifications").append(note);
+        $(note).fadeIn(200);
+
+        if (timeout)
+          setTimeout(() => {
+            $(note).fadeOut(200, () => {
+              $(note).remove();
+            });
+          }, timeout);
+        else
+          $(note).append('<p style="text-align: center; color: #7e7e7e; margin: 0px;"><small>Click to close</small>');
+
+        $(note).on("click", () => {
+          $(note).fadeOut(200, () => {
             $(note).remove();
           });
-        }, timeout);
+        });
       },
     },
     hint: {
@@ -39,10 +56,11 @@ const registerNotifications = () => {
           $("#vtta-hints").css("width", options.width ? options.width : 300);
 
           // construct the note
-          let note = $(`<div style="display: none">${message}<div class="buttons"></div></div>`);
+          let note = $(`<div style="display: none"></div>`);
+          $(note).append(message);
+          $(note).append('<div class="buttons"></div>');
           $("#vtta-hints").append(note);
           $(note).fadeIn(200);
-          const MARGIN = 10;
 
           if (!options.align) options.align = options.element ? "RIGHT" : "CENTER";
 

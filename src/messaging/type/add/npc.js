@@ -73,7 +73,7 @@ const addNPCToCompendium = async (npc, name) => {
         await compendium.createEntity(npc.data);
       }
     } else {
-      console.error("Error opening compendium, check your settings");
+      console.error("Error opening compendium, check your settings"); // eslint-disable-line no-console
     }
   }
 };
@@ -161,7 +161,7 @@ let buildNPC = async (data) => {
       utils.log("Retrieving spells:");
       utils.log(data.flags.vtta.dndbeyond.spells);
       let spells = await retrieveSpells(data.flags.vtta.dndbeyond.spells);
-      spells = spells.map((spell) => spell.data);
+      spells = spells.filter((spell) => spell !== null).map((spell) => spell.data);
       await npc.createEmbeddedEntity("OwnedItem", spells);
     }
   } else {
@@ -214,7 +214,7 @@ let addNPC = (body) => {
         resolve(npc.data);
       })
       .catch((error) => {
-        console.error(`error parsing NPC: ${error}`);
+        console.error(`error parsing NPC: ${error}`); // eslint-disable-line no-console
         reject(error);
       });
   });

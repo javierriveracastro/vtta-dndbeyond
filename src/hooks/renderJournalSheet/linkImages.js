@@ -3,12 +3,11 @@ function linkImages(html) {
 
   // mark all images
   $(html)
-    .find('div[data-edit="content"] img')
+    .find('div[data-edit="content"] img, div[data-edit="content"] video')
     .each((index, element) => {
       const showPlayersButton = $("<a class='vtta-button'><i class='fas fa-eye'></i>&nbsp;Show Players</a>");
       $(showPlayersButton).click(() => {
         const src = $(element).attr("src");
-        console.log("Showing players image: " + src);
         game.socket.emit("module.vtta-dndbeyond", { sender: game.user.data._id, action: "showImage", src: src });
       });
 
@@ -17,33 +16,22 @@ function linkImages(html) {
       $(element)
         .parent()
         .mouseenter(function Hovering() {
-          console.log("Hovering");
           $(this).append(showPlayersButton);
           $(showPlayersButton).click(() => {
             const src = $(element).attr("src");
-            console.log("Showing players image: " + src);
-            game.socket.emit("module.vtta-dndbeyond", { sender: game.user.data._id, action: "showImage", src: src });
+            game.socket.emit("module.vtta-dndbeyond", {
+              sender: game.user.data._id,
+              action: "showImage",
+              src: src,
+              type: element.nodeName,
+            });
           });
         });
       $(element)
         .parent()
         .mouseleave(function Unhovering() {
-          console.log("Unhovering");
           $(this).find("a").remove();
         });
-      // $(element)
-      //   .parent()
-      //   .onmouseenter((event) => {
-      //     $(element).parent().append(showPlayersButton);
-
-      //     $(showPlayersButton).onmouseleave((event) => {});
-      //   });
-
-      // $(showPlayersButton).click((event) => {
-      //   const src = $(element).attr("src");
-      //   console.log("Showing players image: " + src);
-      //   game.socket.emit("module.vtta-dndbeyond", { sender: game.user.data._id, action: "showImage", src: src });
-      // });
     });
 }
 

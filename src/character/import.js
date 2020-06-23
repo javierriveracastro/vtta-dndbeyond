@@ -21,6 +21,18 @@ const gameFolderLookup = [
   },
 ];
 
+const getCharacterUpdatePolicyTypes = () => {
+  let itemTypes = [];
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-class")) itemTypes.push("class");
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-feat")) itemTypes.push("feat");
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-weapon")) itemTypes.push("weapon");
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-equipment")) itemTypes.push("equipment");
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-inventory"))
+    itemTypes = itemTypes.concat(["consumable", "tool", "loot", "backpack"]);
+  if (game.settings.get("vtta-dndbeyond", "character-update-policy-spell")) itemTypes.push("spell");
+  return itemTypes;
+};
+
 /**
  * Returns a combined array of all items to process, filtered by the user's selection on what to skip and what to include
  * @param {object} result object containing all character items sectioned as individual properties
@@ -28,15 +40,7 @@ const gameFolderLookup = [
  */
 const filterItemsByUserSelection = (result, sections) => {
   let items = [];
-
-  let validItemTypes = [];
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-class")) validItemTypes.push("class");
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-feat")) validItemTypes.push("feat");
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-weapon")) validItemTypes.push("weapon");
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-equipment")) validItemTypes.push("equipment");
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-inventory"))
-    validItemTypes = validItemTypes.concat(["consumable", "tool", "loot", "backpack"]);
-  if (game.settings.get("vtta-dndbeyond", "character-update-policy-spell")) validItemTypes.push("spell");
+  const validItemTypes = getCharacterUpdatePolicyTypes();
 
   for (const section of sections) {
     items = items.concat(result[section]).filter((item) => validItemTypes.includes(item.type));
@@ -71,29 +75,50 @@ export default class CharacterImport extends Application {
     $(html).parent().parent().css("height", "auto");
   }
 
-  static async copyFlags(flagGroup, originalItem, targetItem) {
+  static async copyFlagGroup(flagGroup, originalItem, targetItem) {
     if (targetItem.flags === undefined) targetItem.flags = {};
     if (originalItem.flags && !!originalItem.flags[flagGroup]) {
-      console.log(`Copying ${flagGroup} for ${originalItem.name}`);
+      utils.log(`Copying ${flagGroup} for ${originalItem.name}`);
       targetItem.flags[flagGroup] = originalItem.flags[flagGroup];
     }
   }
 
   /**
-   * Coies across some flags for existing items
+   * Copies across some flags for existing item
    * @param {*} items
    */
-  async copySupportedItemFlags(items) {
+  static async copySupportedItemFlags(originalItem, item) {
+    CharacterImport.copyFlagGroup("dynamiceffects", originalItem, item);
+    CharacterImport.copyFlagGroup("maestro", originalItem, item);
+    CharacterImport.copyFlagGroup("mess", originalItem, item);
+  }
+
+  /**
+   * Loops through a characters items and updates flags
+   * @param {*} items
+   */
+  async copySupportedCharacterItemFlags(items) {
     items.forEach((item) => {
       const originalItem = this.actorOriginal.items.find(
         (originalItem) => item.name === originalItem.name && item.type === originalItem.type
       );
       if (originalItem) {
-        CharacterImport.copyFlags("dynamiceffects", originalItem, item);
-        CharacterImport.copyFlags("maestro", originalItem, item);
-        CharacterImport.copyFlags("mess", originalItem, item);
+        CharacterImport.copySupportedItemFlags(originalItem, item);
       }
     });
+  }
+
+  /**
+   * Loops through a characters items and updates flags
+   * @param {*} items
+   */
+  async removeExistingItems(items) {
+    const newItems = items.filter((item) =>
+      !this.actorOriginal.items.some(
+        (originalItem) => item.name === originalItem.name && item.type === originalItem.type
+      )
+    );
+    return newItems;
   }
 
   /**
@@ -120,9 +145,9 @@ export default class CharacterImport extends Application {
               .filter((item) => initialIndex.some((idx) => idx.name === item.name))
               .map(async (item) => {
                 const entry = await compendium.index.find((idx) => idx.name === item.name);
-                console.log("Updating " + entry.name);
                 const existing = await compendium.getEntity(entry._id);
                 item._id = existing._id;
+                await CharacterImport.copySupportedItemFlags(existing, item);
                 await compendium.updateEntity(item);
                 return item;
               })
@@ -137,7 +162,6 @@ export default class CharacterImport extends Application {
           compendiumItems
             .filter((item) => !initialIndex.some((idx) => idx.name === item.name))
             .map(async (item) => {
-              console.log("Creating " + item.name);
               const newItem = await Item.create(item, {
                 temporary: true,
                 displaySheet: false,
@@ -157,7 +181,7 @@ export default class CharacterImport extends Application {
           this.result[type].map(async (item) => {
             const searchResult = await updatedIndex.find((idx) => idx.name === item.name);
             if (!searchResult) {
-              console.warn(`Couldn't find ${item.name} in the compendium`);
+              utils.log(`Couldn't find ${item.name} in the compendium`);
               return null;
             } else {
               const entity = compendium.getEntity(searchResult._id);
@@ -205,8 +229,8 @@ export default class CharacterImport extends Application {
           .filter((item) => existingItems.some((idx) => idx.name === item.name))
           .map(async (item) => {
             const existingItem = await existingItems.find((existing) => item.name === existing.name);
-            console.log("Updating " + existingItem.name);
             item._id = existingItem._id;
+            await CharacterImport.copySupportedItemFlags(existingItem, item);
             await Item.update(item);
             return item;
           })
@@ -221,7 +245,6 @@ export default class CharacterImport extends Application {
             if (!game.user.can("ITEM_CREATE")) {
               ui.notifications.warn(`Cannot create ${folderLookup.type} ${item.name} for ${type}`);
             } else {
-              console.log("Creating " + item.name);
               item.folder = magicItemsFolder._id;
               await Item.create(item);
             }
@@ -262,14 +285,7 @@ export default class CharacterImport extends Application {
    * - spell
    */
   async clearItemsByUserSelection() {
-    let invalidItemTypes = [];
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-class")) invalidItemTypes.push("class");
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-feat")) invalidItemTypes.push("feat");
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-weapon")) invalidItemTypes.push("weapon");
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-equipment")) invalidItemTypes.push("equipment");
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-inventory"))
-      invalidItemTypes = invalidItemTypes.concat(["consumable", "tool", "loot", "backpack"]);
-    if (game.settings.get("vtta-dndbeyond", "character-update-policy-spell")) invalidItemTypes.push("spell");
+    const invalidItemTypes = getCharacterUpdatePolicyTypes();
 
     // collect all items belonging to one of those inventory item categories
     let ownedItems = this.actor.getEmbeddedCollection("OwnedItem");
@@ -277,6 +293,87 @@ export default class CharacterImport extends Application {
       (item) => ! item.name.includes('(keep)')).map((item) => item._id);
     await this.actor.deleteEmbeddedEntity("OwnedItem", toRemove);
     return toRemove;
+  }
+
+  async updateImage(html, data) {
+    // updating the image?
+    let imagePath = this.actor.img;
+    if (
+      game.user.isTrusted &&
+      imagePath.indexOf("mystery-man") !== -1 &&
+      data.character.avatarUrl &&
+      data.character.avatarUrl !== ""
+    ) {
+      CharacterImport.showCurrentTask(html, "Uploading avatar image");
+      let filename = data.character.name
+        .replace(/[^a-zA-Z]/g, "-")
+        .replace(/-+/g, "-")
+        .trim();
+
+      let uploadDirectory = game.settings.get("vtta-dndbeyond", "image-upload-directory").replace(/^\/|\/$/g, "");
+
+      imagePath = await utils.uploadImage(data.character.avatarUrl, uploadDirectory, filename);
+      this.result.character.img = imagePath;
+    }
+  }
+
+  /**
+   * This adds magic item spells to a world,
+   */
+  async updateWorldItems() {
+    const itemSpells = await this.updateFolderItems("itemSpells");
+    // scan the inventory for each item with spells and copy the imported data over
+    this.result.inventory.forEach((item) => {
+      if (item.flags.magicitems.spells) {
+        for (let [i, spell] of Object.entries(item.flags.magicitems.spells)) {
+          const itemSpell = itemSpells.find((item) => item.name === spell.name);
+          if (itemSpell) {
+            for (const [key, value] of Object.entries(itemSpell)) {
+              item.flags.magicitems.spells[i][key] = value;
+            }
+          } else if (!game.user.can("ITEM_CREATE")) {
+            ui.notifications.warn(
+              `Magic Item ${item.name} cannot be enriched because of lacking player permissions`
+            );
+          }
+        }
+      }
+    });
+  }
+
+  async showErrorMessage(html, error) {
+    console.log("%c #### PLEASE PASTE TO https://discord.gg/YEnjUHd #####", "color: #ff0000"); // eslint-disable-line no-console
+    console.log("%c #### ", "color: #ff0000"); // eslint-disable-line no-console
+    console.log("%c #### --------------- COPY BELOW --------------- #####", "color: #ff0000"); // eslint-disable-line no-console
+    if (
+      this.actor.data.flags.vtta &&
+      this.actor.data.flags.vtta.dndbeyond &&
+      this.actor.data.flags.vtta.dndbeyond.url
+    ) {
+      const characterId = this.actor.data.flags.vtta.dndbeyond.url.split("/").pop();
+      if (characterId) {
+        const jsonUrl = "https://character-service.dndbeyond.com/character/v3/character/" + characterId;
+        console.log("%c **Character JSON          :** " + jsonUrl, "color: #ff0000"); // eslint-disable-line no-console
+      }
+    }
+    console.log(`%c **Foundry version         :** ${game.data.version}`, "color: #ff0000"); // eslint-disable-line no-console
+    console.log(`%c **DND5e version           :** ${game.system.data.version}`, "color: #ff0000"); // eslint-disable-line no-console
+    // eslint-disable-line no-console
+    const moduleVersion = game.modules.get("vtta-dndbeyond").data.version;
+    console.log(`%c **VTTA D&D Beyond version :** ${moduleVersion}`, "color: #ff0000"); // eslint-disable-line no-console
+    console.log(error); // eslint-disable-line no-console
+    console.log("%c #### --------------- COPY ABOVE --------------- #####", "color: #ff0000"); // eslint-disable-line no-console
+    CharacterImport.showCurrentTask(
+      html,
+      "I guess you are special!",
+      `We had trouble understanding this character. But you can help us to improve!</p>
+      <p>Please</p>
+      <ul>
+        <li>open the console with F12</li>
+        <li>search for a block of text starting with <b>#### PLEASE PASTE TO ...</b></li>
+        <li>Copy the designated lines and submit it to the Discord channel <a href='https://discord.gg/YEnjUHd'>#parsing-errors</a></li></ul> Thanks!`,
+      true
+    );
   }
 
   /* -------------------------------------------- */
@@ -313,6 +410,11 @@ export default class CharacterImport extends Application {
         isChecked: game.settings.get("vtta-dndbeyond", "character-update-policy-spell"),
         description: "Spells",
       },
+      {
+        name: "new",
+        isChecked: game.settings.get("vtta-dndbeyond", "character-update-policy-new"),
+        description: "Import new only (no delete or update)",
+      },
     ];
 
     return {
@@ -344,17 +446,6 @@ export default class CharacterImport extends Application {
         let data = undefined;
         try {
           data = JSON.parse(pasteData);
-          // the expected data structure is
-          // data: {
-          //    character: {...}
-          // }
-          if (!Object.hasOwnProperty.call(data, "character")) {
-            if (Object.hasOwnProperty.call(data, "data")) {
-              data.character = data.data;
-            } else {
-              data.character = data;
-            }
-          }
         } catch (error) {
           if (error.message === "Unexpected end of JSON input") {
             CharacterImport.showCurrentTask(
@@ -366,24 +457,38 @@ export default class CharacterImport extends Application {
           } else {
             CharacterImport.showCurrentTask(html, "JSON invalid", error.message, true);
           }
+        }
+
+        // check if the character is set to public
+        if (!data.success) {
+          CharacterImport.showCurrentTask(
+            html,
+            "JSON retrieval failed",
+            `D&D Beyond's server states that it could not provide the JSON for your character. The most likely cause is that the <b>Character Privacy</b> is set to <b>Private</b></p>
+              <p>You can change that setting if you open the Character Builder at dndbeyond.com, go to the <b>Home</b> section at the very left and then scroll down all the way to the bottom.</p>
+              <p><img src="modules/vtta-dndbeyond/img/dndbeyond-character-builder.png"/></p>
+              `,
+            true
+          );
           return false;
+        }
+
+        // the expected data structure is
+        // data: {
+        //    character: {...}
+        // }
+        if (!Object.hasOwnProperty.call(data, "character")) {
+          if (Object.hasOwnProperty.call(data, "data")) {
+            data.character = data.data;
+          } else {
+            data.character = data;
+          }
         }
 
         try {
           this.result = parser.parseJson(data);
         } catch (error) {
-          console.log("%c #### PLEASE PASTE TO https://discord.gg/YEnjUHd #####", "color: #ff0000");
-          console.log(`**Foundry version         :** ${game.data.version}`);
-          console.log(`**DND5e version           :** ${game.system.data.version}`);
-          console.log(`**VTTA D&D Beyond version :** ${game.modules.get("vtta-dndbeyond").data.version}`);
-          console.log(error);
-          console.log("%c ##########################################", "color: #ff0000");
-          CharacterImport.showCurrentTask(
-            html,
-            "I guess you are special!",
-            "We had trouble understanding this character. But you can help us to improve! Please <ul><li>open the console with F12</li><li>search for a block of text starting with #### PLEASE PASTE TO #parsing-errors #####</li><li>save the JSON as a text file and submit it along with the error message to <a href='https://discord.gg/YEnjUHd'>#parsing-errors</a></li></ul> Thanks!",
-            true
-          );
+          await this.showErrorMessage(html, error);
           return false;
         }
 
@@ -393,55 +498,22 @@ export default class CharacterImport extends Application {
         // is magicitems installed
         const magicItemsInstalled = !!game.modules.get("magicitems");
 
-        // updating the image?
-        let imagePath = this.actor.img;
-        if (
-          game.user.isTrusted &&
-          imagePath.indexOf("mystery-man") !== -1 &&
-          data.character.avatarUrl &&
-          data.character.avatarUrl !== ""
-        ) {
-          CharacterImport.showCurrentTask(html, "Uploading avatar image");
-          let filename = data.character.name
-            .replace(/[^a-zA-Z]/g, "-")
-            .replace(/-+/g, "-")
-            .trim();
-
-          let uploadDirectory = game.settings.get("vtta-dndbeyond", "image-upload-directory").replace(/^\/|\/$/g, "");
-
-          imagePath = await utils.uploadImage(data.character.avatarUrl, uploadDirectory, filename);
-          this.result.character.img = imagePath;
-        }
+        await this.updateImage(html, data);
 
         // basic import
         CharacterImport.showCurrentTask(html, "Updating basic character information");
         await this.actor.update(this.result.character);
 
-        // // clear items
-        CharacterImport.showCurrentTask(html, "Clearing inventory");
-        await this.clearItemsByUserSelection();
+        // clear items
+        if (!game.settings.get("vtta-dndbeyond", "character-update-policy-new")) {
+          CharacterImport.showCurrentTask(html, "Clearing inventory");
+          await this.clearItemsByUserSelection();
+        }
 
         // store all spells in the folder specific for Dynamic Items
         if (magicItemsInstalled && this.result.itemSpells && Array.isArray(this.result.itemSpells)) {
           CharacterImport.showCurrentTask(html, "Preparing magicitem spells");
-          const itemSpells = await this.updateFolderItems("itemSpells");
-          // scan the inventory for each item with spells and copy the imported data over
-          this.result.inventory.forEach((item) => {
-            if (item.flags.magicitems.spells) {
-              for (let [i, spell] of Object.entries(item.flags.magicitems.spells)) {
-                const itemSpell = itemSpells.find((item) => item.name === spell.name);
-                if (itemSpell) {
-                  for (const [key, value] of Object.entries(itemSpell)) {
-                    item.flags.magicitems.spells[i][key] = value;
-                  }
-                } else if (!game.user.can("ITEM_CREATE")) {
-                  ui.notifications.warn(
-                    `Magic Item ${item.name} cannot be enriched because of lacking player permissions`
-                  );
-                }
-              }
-            }
-          });
+          this.updateWorldItems();
         }
 
         // Update compendium packs with spells and inventory
@@ -460,16 +532,23 @@ export default class CharacterImport extends Application {
           items = items.flat();
         }
 
-        CharacterImport.showCurrentTask(html, "Copying existing flags");
-        await this.copySupportedItemFlags(items);
+        if (game.settings.get("vtta-dndbeyond", "character-update-policy-new")) {
+          items = await this.removeExistingItems(items);
+        }
 
-        utils.log("Character items", "character");
-        utils.log(items, "character");
+        // if we still have items to add, add them
+        if (items.length > 0) {
+          CharacterImport.showCurrentTask(html, "Copying existing flags");
+          await this.copySupportedCharacterItemFlags(items);
 
-        CharacterImport.showCurrentTask(html, "Adding items to character");
-        await this.actor.createEmbeddedEntity("OwnedItem", items, {
-          displaySheet: false,
-        });
+          utils.log("Character items", "character");
+          utils.log(items, "character");
+
+          CharacterImport.showCurrentTask(html, "Adding items to character");
+          await this.actor.createEmbeddedEntity("OwnedItem", items, {
+            displaySheet: false,
+          });
+        }
 
         // We loop back over the spell slots to update them to our computed
         // available value as per DDB.
