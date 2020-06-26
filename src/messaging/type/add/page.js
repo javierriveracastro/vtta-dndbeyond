@@ -206,6 +206,7 @@ const addJournalEntries = async (data, scenes) => {
     const notes = [];
     for (let [index, entry] of entries.entries()) {
       const prefix = ("" + (index + 1)).padStart(2, "0");
+      // eslint-disable-next-line
       let je = await addJournalEntry([data.title, scene.name], data.book, prefix, entry.name, entry.content, VTTAID);
 
       if (entry.positions) {
@@ -288,7 +289,7 @@ const createScene = async (scene, folder) => {
   const SCENE_FORMAT_ORIG = 1; // BOO!
 
   const uploadDirectory = game.settings.get("vtta-dndbeyond", "scene-upload-directory");
-  const uploadFileFormat = game.settings.get("vtta-dndbeyond", "scene-format");
+  const uploadFileFormat = parseInt(game.settings.get("vtta-dndbeyond", "scene-format"));
 
   let playerSrc = null,
     gmSrc = null;
